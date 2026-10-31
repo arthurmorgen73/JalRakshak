@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JalRakshak (Save Water) v0.0.1 - Smart Water Tank Overflow Prevention</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* Overhead Tank Container */
+        .tank-container {
+            position: relative;
+            width: 220px;
+            height: 280px;
+            border: 5px solid #475569;
+            border-top: 8px solid #64748b;
+            border-radius: 16px 16px 24px 24px;
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+            box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.75), 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Tank Ribbing (like Indian Sintex tanks) */
+        .tank-rib {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.08);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        /* Water Fill Level */
+        .water-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 45%, #0369a1 100%);
+            transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+            z-index: 5;
+        }
+
+        .water-fill.overflow-state {
+            background: linear-gradient(180deg, #f87171 0%, #dc2626 50%, #991b1b 100%);
+        }
+
+        /* Surface Shimmer */
+        .water-surface {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.5);
+            animation: surfacePulse 2s infinite ease-in-out;
+        }
+
+        @keyframes surfacePulse {
+            0%, 100% { opacity: 0.35; transform: scaleY(1); }
+            50% { opacity: 0.8; transform: scaleY(1.4); }
+        }
+
+        /* Ultrasonic Beam Animation */
+        .ultrasonic-beam {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #22d3ee 0px,
+                #22d3ee 6px,
+                transparent 6px,
+                transparent 12px
+            );
+            z-index: 10;
+            opacity: 0.8;
+            transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Overflow Waterfall Cascades */
+        .overflow-stream-left, .overflow-stream-right {
+            position: absolute;
+            top: 28px;
+            width: 10px;
+            height: 275px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #f87171 0px,
+                #ef4444 12px,
+                transparent 12px,
+                transparent 20px
+            );
+            background-size: 100% 28px;
+            animation: waterCascade 0.3s linear infinite;
+            z-index: 25;
+            border-radius: 8px;
+            filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.85));
+        }
+
+        .overflow-stream-left { left: -14px; }
+        .overflow-stream-right { right: -14px; }
+
+        @keyframes waterCascade {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 28px; }
+        }
+
+        /* Inlet Water Stream */
+        .inlet-stream {
+            position: absolute;
+            top: 0;
+            left: 26%;
+            width: 6px;
+            height: 100%;
+            background: repeating-linear-gradient(
+                to bottom,
+                #7dd3fc 0px,
+                #38bdf8 14px,
+                rgba(56, 189, 248, 0.15) 14px,
+                rgba(56, 189, 248, 0.15) 22px
+            );
+            background-size: 100% 24px;
+            animation: waterCascade 0.28s linear infinite;
+            z-index: 4;
+            transition: opacity 0.2s ease;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-slate-900/90 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+                    <i class="fa-solid fa-droplet text-white text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center flex-wrap gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">
+                            JalRakshak (Save Water) <span class="text-cyan-400 font-mono font-semibold text-sm">v0.0.1</span>
+                        </h1>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                            Save Water Prototype
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">Engineering Design Thinking Methodology Project • Smart Overhead Tank System</p>
+                </div>
+            </div>
+
+            <nav class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <a href="#simulator-section" class="text-xs sm:text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-gauge-high text-cyan-400"></i> Live Simulator
+                </a>
+                <a href="#roi-calculator-section" class="text-xs sm:text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-calculator text-emerald-400"></i> Colony Impact
+                </a>
+                <a href="#design-thinking-section" class="text-xs sm:text-sm px-3 py-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-lightbulb text-amber-400"></i> 5 Stages
+                </a>
+                <a href="#team-section" class="text-xs sm:text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-users text-purple-400"></i> Team
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+
+        <!-- Top Real-Time KPI Cards -->
+        <section id="simulator-section" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Current Tank Volume -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Current Tank Level</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="kpi-level-pct" class="text-3xl font-extrabold text-white">62%</span>
+                        <span id="kpi-level-litres" class="text-sm font-medium text-cyan-400">(620 / 1,000 L)</span>
+                    </div>
+                    <p id="kpi-sensor-dist" class="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
+                        <i class="fa-solid fa-wave-square text-cyan-400"></i> JSN-SR04T Reading: <span class="text-slate-200 font-mono">54 cm</span>
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-xl">
+                    <i class="fa-solid fa-water"></i>
+                </div>
+            </div>
+
+            <!-- Card 2: Motor Pump & Relay State -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Submersible Pump (1.5 HP)</p>
+                    <div class="flex items-center gap-2 mt-1.5">
+                        <span id="motor-status-dot" class="w-3 h-3 rounded-full bg-slate-400"></span>
+                        <span id="kpi-motor-status" class="text-2xl font-bold text-white">AUTO-STANDBY</span>
+                    </div>
+                    <p id="kpi-mode-subtext" class="text-xs text-emerald-400 mt-1.5 flex items-center gap-1">
+                        <i class="fa-solid fa-shield-halved"></i> Auto-Cut Armed @ 95%
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-slate-700/50 border border-slate-600 flex items-center justify-center text-slate-300 text-xl transition-all">
+                    <i id="motor-spin-icon" class="fa-solid fa-fan"></i>
+                </div>
+            </div>
+
+            <!-- Card 3: Monthly Water Saved -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Est. Water Saved (Month)</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="kpi-water-saved" class="text-3xl font-extrabold text-emerald-400">3,450 L</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1.5">
+                        ~115 L/day overflow prevented
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
+                    <i class="fa-solid fa-hand-holding-droplet"></i>
+                </div>
+            </div>
+
+            <!-- Card 4: Electricity & Cost Impact -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Power & Bill Saved</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="kpi-money-saved" class="text-3xl font-extrabold text-amber-400">₹ 420</span>
+                        <span class="text-xs text-slate-400">/ month</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1.5">
+                        Prevents dry-run & over-pumping
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl">
+                    <i class="fa-solid fa-indian-rupee-sign"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Overflow Warning Banner (Hidden unless Manual Mode reaches 100%) -->
+        <div id="overflow-banner" class="hidden bg-red-950/90 border-2 border-red-500 rounded-2xl p-4 sm:p-5 shadow-2xl shadow-red-600/20 animate-pulse">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-red-600 flex items-center justify-center text-white text-2xl shrink-0">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-extrabold text-red-200 tracking-wide">
+                            CRITICAL OVERFLOW ALERT — TERRACE TANK SPILLING!
+                        </h2>
+                        <p class="text-xs sm:text-sm text-red-300">
+                            Manual Mode is active! The pump was not turned off at 100%. Switch to <strong>Smart Auto-Cut Mode</strong> or stop the motor immediately!
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div class="bg-red-900/80 border border-red-400/40 rounded-xl px-4 py-2 text-center">
+                        <p class="text-[11px] uppercase tracking-wider text-red-200 font-semibold">Live Water Wasted</p>
+                        <p class="text-2xl font-black text-white"><span id="wasted-litres-counter">0</span> Litres</p>
+                    </div>
+                    <button type="button" onclick="setSystemMode('SMART')" class="px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0">
+                        Activate Smart Cut-Off Now
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Simulation Grid -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Visual Overhead Water Tank (5 Cols) -->
+            <div class="lg:col-span-5 bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col items-center justify-between relative overflow-hidden">
+                <div class="w-full flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-building-user text-cyan-400"></i> Terrace Tank Visualizer
+                        </h3>
+                        <p class="text-xs text-slate-400">1,000L 3-Layer UV Stabilized Overhead Tank</p>
+                    </div>
+                    <span id="sensor-badge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> IoT Auto-Cut Active
+                    </span>
+                </div>
+
+                <!-- Visual Tank Diagram Area -->
+                <div class="relative my-4 flex flex-col items-center">
+                    <!-- Ultrasonic Sensor Cap on top of Tank -->
+                    <div class="w-36 h-7 bg-slate-700 border-2 border-cyan-400/60 rounded-t-xl flex items-center justify-center gap-1.5 z-20 shadow-md">
+                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span class="text-[10px] font-mono font-bold text-cyan-200">ESP32 + JSN-SR04T</span>
+                    </div>
+
+                    <!-- Overflow Cascades (Left & Right) -->
+                    <div id="overflow-left" class="overflow-stream-left hidden"></div>
+                    <div id="overflow-right" class="overflow-stream-right hidden"></div>
+
+                    <!-- The Tank Body -->
+                    <div class="tank-container">
+                        <!-- Sintex-style horizontal tank ribs -->
+                        <div class="tank-rib" style="top: 25%;"></div>
+                        <div class="tank-rib" style="top: 50%;"></div>
+                        <div class="tank-rib" style="top: 75%;"></div>
+
+                        <!-- 95% Auto-Cut Marker Line -->
+                        <div id="autocut-marker" class="absolute left-0 right-0 border-t-2 border-dashed border-emerald-400/80 z-20 flex items-center justify-end pr-2" style="bottom: 95%;">
+                            <span class="text-[10px] font-bold bg-slate-900/90 text-emerald-300 px-1.5 py-0.5 rounded -mt-5 border border-emerald-500/30">
+                                95% Auto-Cut
+                            </span>
+                        </div>
+
+                        <!-- 20% Low Level Auto-Start Marker Line -->
+                        <div class="absolute left-0 right-0 border-t border-dashed border-amber-400/60 z-20 flex items-center justify-end pr-2" style="bottom: 20%;">
+                            <span class="text-[10px] font-medium bg-slate-900/80 text-amber-300 px-1.5 py-0.5 rounded -mt-4">
+                                20% Auto-Start
+                            </span>
+                        </div>
+
+                        <!-- Ultrasonic Sonar Pulse Line -->
+                        <div id="ultrasonic-beam" class="ultrasonic-beam" style="height: 38%;"></div>
+
+                        <!-- Incoming Water Stream when Pump is ON -->
+                        <div id="inlet-stream" class="inlet-stream opacity-0"></div>
+
+                        <!-- Animated Water Fill -->
+                        <div id="water-fill-el" class="water-fill" style="height: 62%;">
+                            <div class="water-surface"></div>
+                        </div>
+
+                        <!-- Center Overlay Readout inside Tank -->
+                        <div class="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
+                            <div class="bg-slate-900/85 backdrop-blur-sm border border-slate-700/80 px-4 py-2 rounded-2xl text-center shadow-xl">
+                                <span id="tank-center-pct" class="text-3xl font-black text-white">62%</span>
+                                <p id="tank-center-litres" class="text-xs font-semibold text-cyan-300">620 Litres</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terrace Concrete Slab Base -->
+                    <div class="w-64 h-4 bg-slate-600 rounded-full border-t border-slate-500 shadow-inner"></div>
+                </div>
+
+                <!-- Bottom Legend -->
+                <div class="w-full grid grid-cols-3 gap-2 pt-3 border-t border-slate-700/60 text-center text-xs">
+                    <div class="bg-slate-900/60 p-2 rounded-lg">
+                        <p class="text-slate-400">Inlet Flow</p>
+                        <p id="inlet-flow-rate" class="font-bold text-cyan-400 mt-0.5">0 L/min</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-2 rounded-lg">
+                        <p class="text-slate-400">Outlet Usage</p>
+                        <p id="outlet-flow-rate" class="font-bold text-amber-400 mt-0.5">0 L/min</p>
+                    </div>
+                    <div class="bg-slate-900/60 p-2 rounded-lg">
+                        <p class="text-slate-400">Wasted Today</p>
+                        <p id="wasted-mini-stat" class="font-bold text-emerald-400 mt-0.5">0 Litres</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle Column: Control Center & Mode Comparison (4 Cols) -->
+            <div class="lg:col-span-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between space-y-5">
+                <div>
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-cyan-400"></i> Simulation Control Panel
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Test how Smart IoT Mode prevents terrace tank overflow vs Manual operation.</p>
+
+                    <!-- 1. Mode Switcher (Smart vs Manual) -->
+                    <div class="mt-4">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                            1. Select Operating Mode
+                        </label>
+                        <div class="grid grid-cols-2 gap-2.5 p-1.5 bg-slate-900 rounded-xl border border-slate-700">
+                            <button type="button" id="btn-mode-smart" onclick="setSystemMode('SMART')" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md">
+                                <i class="fa-solid fa-microchip text-sm"></i>
+                                <span>Smart Auto-Cut</span>
+                                <span class="text-[10px] font-normal opacity-90">(Stops @ 95%)</span>
+                            </button>
+                            <button type="button" id="btn-mode-manual" onclick="setSystemMode('MANUAL')" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-white">
+                                <i class="fa-solid fa-hand-pointer text-sm"></i>
+                                <span>Manual Mode</span>
+                                <span class="text-[10px] font-normal opacity-80">(Traditional / Risk)</span>
+                            </button>
+                        </div>
+                        <p id="mode-helper-text" class="text-xs text-cyan-300/90 mt-2 bg-cyan-950/40 border border-cyan-500/20 rounded-lg p-2.5">
+                            <i class="fa-solid fa-circle-check mr-1"></i> <strong>IoT Relay Active:</strong> Ultrasonic sensor automatically cuts off motor relay at 95% (950L) and triggers auto-fill if water drops below 20%.
+                        </p>
+                    </div>
+
+                    <!-- 2. Pump & Tap Controls -->
+                    <div class="mt-4 space-y-2.5">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+                            2. Hardware Actions
+                        </label>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <!-- Motor Start/Stop Button -->
+                            <button type="button" id="btn-toggle-pump" onclick="toggleMotorPump()" class="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-power-off"></i>
+                                <span id="btn-pump-text">Start Motor Pump</span>
+                            </button>
+
+                            <!-- Simulate Household Water Usage -->
+                            <button type="button" id="btn-toggle-drain" onclick="toggleWaterDrain()" class="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-600 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-faucet-drip text-cyan-400"></i>
+                                <span id="btn-drain-text">Open House Taps</span>
+                            </button>
+                        </div>
+
+                        <!-- 1-Click Instant Overflow Demo Button for Evaluators -->
+                        <button type="button" onclick="triggerInstantOverflowDemo()" class="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-bolt text-red-400"></i>
+                            <span>1-Click Evaluator Demo: Simulate Manual Overflow</span>
+                        </button>
+                    </div>
+
+                    <!-- 3. Quick Test Presets & Speed Slider -->
+                    <div class="mt-4 space-y-3.5 pt-3.5 border-t border-slate-700/70">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="font-semibold text-slate-300">3. Tank Level Slider & Presets</span>
+                                <span id="slider-level-label" class="text-cyan-400 font-bold">62%</span>
+                            </div>
+                            <input id="quick-level-slider" type="range" min="0" max="100" value="62" oninput="handleManualLevelSlide(this.value)" class="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-700 rounded-lg">
+                            <div class="grid grid-cols-4 gap-1.5 mt-2">
+                                <button type="button" onclick="jumpToLevel(18)" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-[11px] font-semibold text-amber-300 border border-slate-700 transition">
+                                    18% (Low)
+                                </button>
+                                <button type="button" onclick="jumpToLevel(50)" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 border border-slate-700 transition">
+                                    50% (Half)
+                                </button>
+                                <button type="button" onclick="jumpToLevel(92)" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-[11px] font-semibold text-emerald-300 border border-slate-700 transition">
+                                    92% (Cut)
+                                </button>
+                                <button type="button" onclick="jumpToLevel(100)" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-[11px] font-semibold text-red-300 border border-slate-700 transition">
+                                    100% (Full)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="font-semibold text-slate-300">4. Simulation Filling Speed</span>
+                                <span id="speed-label" class="text-amber-400 font-bold">2x Fast</span>
+                            </div>
+                            <input id="sim-speed-slider" type="range" min="1" max="5" value="2" oninput="updateSimSpeed(this.value)" class="w-full accent-amber-400 cursor-pointer h-2 bg-slate-700 rounded-lg">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Restore default state (62%)</span>
+                    <button type="button" onclick="resetSimulation()" class="text-xs px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-semibold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-right"></i> Reset Demo
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Smart Alert & Notification Log (3 Cols) -->
+            <div class="lg:col-span-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between h-[540px] lg:h-auto">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-700/80">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-bell text-amber-400"></i> Smart Alert Feed
+                        </h3>
+                        <p class="text-xs text-slate-400">Simulated SMS & App Push Logs</p>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="sendTestAlert()" class="text-[11px] px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition">
+                            + Test SMS
+                        </button>
+                        <button type="button" onclick="clearLogs()" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scrollable Notification List -->
+                <div id="notification-feed" class="flex-grow overflow-y-auto space-y-2.5 my-3 pr-1 max-h-[360px]">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <!-- Hardware Bill of Materials Mini Box -->
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs">
+                    <p class="font-bold text-slate-200 flex items-center justify-between">
+                        <span><i class="fa-solid fa-screwdriver-wrench text-cyan-400 mr-1"></i> Prototype Hardware Cost</span>
+                        <span class="text-emerald-400 font-extrabold">~ ₹ 650</span>
+                    </p>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        ESP8266/ESP32 NodeMCU (₹280) + Waterproof Ultrasonic JSN-SR04T (₹220) + 30A Relay Module (₹150).
+                    </p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Interactive ROI & Colony Water Savings Calculator -->
+        <section id="roi-calculator-section" class="bg-gradient-to-br from-slate-800/80 to-slate-900/90 border border-slate-700/80 rounded-3xl p-6 sm:p-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/80 pb-5">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">Interactive Impact Estimator</span>
+                    <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-1 flex items-center gap-2">
+                        <i class="fa-solid fa-hand-holding-Water text-cyan-400"></i> Colony & Community Water Savings Calculator
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-0.5">
+                        Adjust the sliders below to demonstrate how much potable water and electricity <strong>JalRakshak (Save Water) v0.0.1</strong> saves across an entire residential colony.
+                    </p>
+                </div>
+                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-2.5 text-right shrink-0">
+                    <span class="text-[11px] uppercase tracking-wider text-emerald-300 font-semibold block">Hardware Payback Period</span>
+                    <span class="text-lg font-black text-white">Under 45 Days</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-center">
+                <!-- Sliders (6 cols) -->
+                <div class="lg:col-span-6 space-y-5 bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                    <div>
+                        <div class="flex justify-between text-xs sm:text-sm mb-2">
+                            <span class="font-semibold text-slate-200">Number of Houses / Apartments Installed:</span>
+                            <span id="calc-houses-label" class="font-extrabold text-cyan-400">25 Houses</span>
+                        </div>
+                        <input id="calc-houses-slider" type="range" min="1" max="100" value="25" oninput="updateColonyCalculator()" class="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-700 rounded-lg">
+                        <div class="flex justify-between text-[11px] text-slate-500 mt-1">
+                            <span>1 House</span>
+                            <span>25 Houses</span>
+                            <span>50 Houses</span>
+                            <span>100 Houses</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs sm:text-sm mb-2">
+                            <span class="font-semibold text-slate-200">Avg. Daily Overflow Prevented per House:</span>
+                            <span id="calc-mins-label" class="font-extrabold text-amber-400">3 Minutes / day (~135 L)</span>
+                        </div>
+                        <input id="calc-mins-slider" type="range" min="1" max="10" value="3" oninput="updateColonyCalculator()" class="w-full accent-amber-400 cursor-pointer h-2 bg-slate-700 rounded-lg">
+                        <div class="flex justify-between text-[11px] text-slate-500 mt-1">
+                            <span>1 Min (45L)</span>
+                            <span>3 Mins (135L)</span>
+                            <span>5 Mins (225L)</span>
+                            <span>10 Mins (450L)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Metrics (6 cols) -->
+                <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-4 text-center">
+                        <p class="text-xs text-slate-400 font-medium">Monthly Water Saved</p>
+                        <p id="calc-monthly-water" class="text-2xl sm:text-3xl font-black text-cyan-400 mt-1">1,01,250 L</p>
+                        <p class="text-[11px] text-slate-400 mt-1">~10 Water Tanker Lorries</p>
+                    </div>
+                    <div class="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 text-center">
+                        <p class="text-xs text-slate-400 font-medium">Annual Water Saved</p>
+                        <p id="calc-annual-water" class="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">12.15 Lakh L</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Groundwater Preserved</p>
+                    </div>
+                    <div class="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 text-center">
+                        <p class="text-xs text-slate-400 font-medium">Monthly Power Saved</p>
+                        <p id="calc-monthly-rupees" class="text-2xl sm:text-3xl font-black text-amber-400 mt-1">₹ 11,250</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Combined Colony Savings</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engineering Design Thinking Methodology Showcase Section (ALL 5 STAGES) -->
+        <section id="design-thinking-section" class="bg-slate-800/40 border border-slate-700/80 rounded-3xl p-6 sm:p-8 space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/80 pb-5">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-cyan-400">Course Evaluation Showcase</span>
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                        Design Thinking Methodology Framework (5 Stages)
+                    </h2>
+                    <p class="text-sm text-slate-400 mt-1">
+                        Complete 5-stage breakdown of how <strong class="text-slate-200">JalRakshak (Save Water) v0.0.1</strong> solves residential water tank overflow.
+                    </p>
+                </div>
+
+                <!-- Interactive Filter Tabs for All 5 Stages -->
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="highlightDTStage('all')" id="dt-tab-all" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition">
+                        All 5 Stages
+                    </button>
+                    <button type="button" onclick="highlightDTStage('empathize')" id="dt-tab-empathize" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                        1. Empathize
+                    </button>
+                    <button type="button" onclick="highlightDTStage('define')" id="dt-tab-define" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                        2. Define
+                    </button>
+                    <button type="button" onclick="highlightDTStage('ideate')" id="dt-tab-ideate" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                        3. Ideate
+                    </button>
+                    <button type="button" onclick="highlightDTStage('prototype')" id="dt-tab-prototype" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                        4. Prototype
+                    </button>
+                    <button type="button" onclick="highlightDTStage('test')" id="dt-tab-test" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                        5. Test
+                    </button>
+                </div>
+            </div>
+
+            <!-- 5-Stage Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                
+                <!-- Stage 1: Empathize -->
+                <div id="dt-card-empathize" class="dt-card bg-slate-900/75 border border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-pink-500/50">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-pink-500/15 text-pink-300 border border-pink-500/30">
+                                Stage 01
+                            </span>
+                            <div class="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-400 text-lg">
+                                <i class="fa-solid fa-heart-pulse"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Empathize</h3>
+                        <p class="text-xs text-slate-400 mt-1">Understanding Resident Pain Points</p>
+                        <ul class="mt-4 space-y-2.5 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-dot text-pink-400 mt-1"></i>
+                                <span><strong>Busy Morning Rush:</strong> Residents switch on the submersible pump and get busy cooking or getting ready, forgetting to turn it off.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-dot text-pink-400 mt-1"></i>
+                                <span><strong>Neighbour Friction:</strong> Water pours down from the terrace onto parked two-wheelers, laundry, and walkways, causing daily arguments.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-dot text-pink-400 mt-1"></i>
+                                <span><strong>Blind Operation:</strong> Climbing to the rooftop in summer or monsoon just to check the tank level is inconvenient and unsafe for elders.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-pink-300 italic">
+                        "We only realize the tank is full when water starts cascading down the terrace pipe!" — Surveyed Resident
+                    </div>
+                </div>
+
+                <!-- Stage 2: Define -->
+                <div id="dt-card-define" class="dt-card bg-slate-900/75 border border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-amber-500/50">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                Stage 02
+                            </span>
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 text-lg">
+                                <i class="fa-solid fa-bullseye"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Define</h3>
+                        <p class="text-xs text-slate-400 mt-1">Core Problem Statement & Metrics</p>
+                        <div class="mt-4 bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 leading-relaxed">
+                            <strong>Problem Statement:</strong> Unmonitored domestic motor pump operation in urban houses and apartments leads to <strong>50 to 200 Litres</strong> of clean potable water wasted per overflow event.
+                        </div>
+                        <ul class="mt-3 space-y-2 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-arrow-trend-up text-amber-400 mt-1"></i>
+                                <span>A 1.5 HP pump discharges ~40–60 Litres/min; just 3 minutes of overflow wastes <strong>150+ Litres</strong>.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-bolt text-amber-400 mt-1"></i>
+                                <span>Causes structural terrace seepage, damp walls, algae growth, and excess electricity bills.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-amber-300 font-semibold">
+                        Target: Zero manual intervention & 100% overflow elimination.
+                    </div>
+                </div>
+
+                <!-- Stage 3: Ideate -->
+                <div id="dt-card-ideate" class="dt-card bg-slate-900/75 border border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-cyan-500/50">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                Stage 03
+                            </span>
+                            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 text-lg">
+                                <i class="fa-solid fa-brain"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Ideate</h3>
+                        <p class="text-xs text-slate-400 mt-1">Why Non-Contact Ultrasonic IoT?</p>
+                        <ul class="mt-4 space-y-2.5 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-xmark text-red-400 mt-1"></i>
+                                <span><strong>Rejected Idea 1 (Metal Dip Wires):</strong> Corrode rapidly in hard borewell water due to electrolysis and fail within months.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-xmark text-red-400 mt-1"></i>
+                                <span><strong>Rejected Idea 2 (Loud Buzzer Only):</strong> Annoying to neighbours and useless if nobody is near the switchboard to turn off the pump.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
+                                <span><strong>Selected Solution:</strong> Non-contact <strong>JSN-SR04T Ultrasonic Sensor</strong> on tank lid + <strong>ESP32 30A Relay Cut-off</strong> + Web Dashboard.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-cyan-300 font-semibold">
+                        Zero water contact = Zero corrosion in hard water.
+                    </div>
+                </div>
+
+                <!-- Stage 4: Prototype -->
+                <div id="dt-card-prototype" class="dt-card bg-slate-900/75 border border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-emerald-500/50">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                Stage 04
+                            </span>
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-lg">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Prototype</h3>
+                        <p class="text-xs text-slate-400 mt-1">Interactive Software & IoT Architecture</p>
+                        <ul class="mt-4 space-y-2.5 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-check text-emerald-400 mt-1"></i>
+                                <span><strong>Automated Cut-Off:</strong> Instantly trips the pump contactor at 95% volume with SMS/App alert.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-check text-emerald-400 mt-1"></i>
+                                <span><strong>Low-Cost BOM (~₹650):</strong> Uses affordable off-the-shelf NodeMCU ESP32, waterproof transducer, and 30A relay.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-check text-emerald-400 mt-1"></i>
+                                <span><strong>Colony Scale:</strong> If deployed across 50 houses in a layout, saves <strong>~1.72 Lakh Litres</strong> of groundwater every month!</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-emerald-300 font-semibold">
+                        Supports UN SDG Goal 6 (Clean Water & Sanitation).
+                    </div>
+                </div>
+
+                <!-- Stage 5: Test -->
+                <div id="dt-card-test" class="dt-card bg-slate-900/75 border border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-purple-500/50">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                Stage 05
+                            </span>
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 text-lg">
+                                <i class="fa-solid fa-vial-circle-check"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Test</h3>
+                        <p class="text-xs text-slate-400 mt-1">User Testing & Calibration Feedback</p>
+                        <ul class="mt-4 space-y-2.5 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-flask text-purple-400 mt-1"></i>
+                                <span><strong>95% vs 100% Cut-Off Test:</strong> Verified that stopping at 95% prevents inlet pipe surge overflow while maximizing usable storage.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-wave-square text-purple-400 mt-1"></i>
+                                <span><strong>Turbulence & Foam Calibration:</strong> Added 5-sample median filtering in firmware so splashing inflow water doesn't cause false readings.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-shield-halved text-purple-400 mt-1"></i>
+                                <span><strong>Fail-Safe & Dry-Run Check:</strong> Tested manual override toggle and dry-run protection if inflow rate stays 0 L/min for 2 minutes.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-purple-300 font-semibold">
+                        Validated with users for 100% reliability & zero spill.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Project Team / Contributors Showcase Section -->
+        <section id="team-section" class="bg-slate-800/50 border border-slate-700/80 rounded-3xl p-6 sm:p-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-700/80">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">Engineering Design Thinking Team</span>
+                    <h2 class="text-2xl font-extrabold text-white mt-1 flex items-center gap-2.5">
+                        <i class="fa-solid fa-users-gear text-cyan-400"></i> Project Contributors — JalRakshak (Save Water)
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-1">
+                        Collaborative engineering team behind the field empathy research, 5-stage design thinking analysis, and <strong>v0.0.1</strong> interactive prototype.
+                    </p>
+                </div>
+                <div class="px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs text-slate-300 font-mono shrink-0">
+                    Prototype Build: <span class="text-cyan-400 font-bold">v0.0.1</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+                <!-- Member 1: Himanshu Raj -->
+                <div class="bg-slate-900/80 border border-slate-700/80 hover:border-cyan-500/50 rounded-2xl p-4 flex items-center gap-3.5 transition-all group">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-md">
+                        HR
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white group-hover:text-cyan-300 transition">Himanshu Raj</h3>
+                        <p class="text-[11px] text-slate-400">Team Member • Design Thinking</p>
+                    </div>
+                </div>
+
+                <!-- Member 2: Satyam Raj -->
+                <div class="bg-slate-900/80 border border-slate-700/80 hover:border-emerald-500/50 rounded-2xl p-4 flex items-center gap-3.5 transition-all group">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-md">
+                        SR
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white group-hover:text-emerald-300 transition">Satyam Raj</h3>
+                        <p class="text-[11px] text-slate-400">Team Member • Design Thinking</p>
+                    </div>
+                </div>
+
+                <!-- Member 3: Gireesh Nagasai Katta -->
+                <div class="bg-slate-900/80 border border-slate-700/80 hover:border-amber-500/50 rounded-2xl p-4 flex items-center gap-3.5 transition-all group">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-md">
+                        GK
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white group-hover:text-amber-300 transition">Gireesh Nagasai Katta</h3>
+                        <p class="text-[11px] text-slate-400">Team Member • Design Thinking</p>
+                    </div>
+                </div>
+
+                <!-- Member 4: Ayush Saxena -->
+                <div class="bg-slate-900/80 border border-slate-700/80 hover:border-purple-500/50 rounded-2xl p-4 flex items-center gap-3.5 transition-all group">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-md">
+                        AS
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white group-hover:text-purple-300 transition">Ayush Saxena</h3>
+                        <p class="text-[11px] text-slate-400">Team Member • Design Thinking</p>
+                    </div>
+                </div>
+
+                <!-- Member 5: Mayank Singh -->
+                <div class="bg-slate-900/80 border border-slate-700/80 hover:border-pink-500/50 rounded-2xl p-4 flex items-center gap-3.5 transition-all group">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-md">
+                        MS
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white group-hover:text-pink-300 transition">Mayank Singh</h3>
+                        <p class="text-[11px] text-slate-400">Team Member • Design Thinking</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/80 py-5 mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+            <p><strong>JalRakshak (Save Water) v0.0.1</strong> — Engineering Design Thinking Methodology Interactive Prototype</p>
+            <p class="text-slate-300 font-medium">Team: Himanshu Raj • Satyam Raj • Gireesh Nagasai Katta • Ayush Saxena • Mayank Singh</p>
+        </div>
+    </footer>
+
+    <!-- Complete Simulation & Interactive Logic Script -->
+    <script>
+        // --- Core Simulation State ---
+        const TANK_CAPACITY = 1000; // 1,000 Litres
+        const TANK_HEIGHT_CM = 120; // 120 cm physical height for ultrasonic calculation
+        let waterLevelPct = 62;     // Starts at 62%
+        let systemMode = 'SMART';   // 'SMART' or 'MANUAL'
+        let isPumpRunning = false;
+        let isDraining = false;
+        let simSpeedMultiplier = 2;
+        let wastedLitres = 0;
+        let monthlySavedLitres = 3450;
+
+        // Track milestone alerts so they don't spam on every tick
+        let triggeredAlerts = {
+            low20: false,
+            half50: true,
+            high80: false,
+            cut95: false,
+            overflow100: false
+        };
+
+        // --- Initialize Dashboard on DOM Ready ---
+        window.addEventListener('DOMContentLoaded', function () {
+            addNotification(
+                'SYSTEM v0.0.1',
+                'JalRakshak (Save Water) Initialized',
+                'Connected to Overhead Tank Sensor (ESP32 + JSN-SR04T). Smart Auto-Cut armed at 95%.',
+                'cyan'
+            );
+            updateUI();
+            updateColonyCalculator();
+
+            // Main simulation loop running every 250ms
+            setInterval(simulationTick, 250);
+        });
+
+        // --- Main Simulation Tick ---
+        function simulationTick() {
+            let netChangePct = 0;
+
+            // Filling rate when motor pump is ON
+            if (isPumpRunning) {
+                netChangePct += 0.45 * simSpeedMultiplier;
+            }
+
+            // Draining rate when household taps are OPEN
+            if (isDraining) {
+                netChangePct -= 0.30 * simSpeedMultiplier;
+            }
+
+            if (netChangePct !== 0) {
+                waterLevelPct += netChangePct;
+            }
+
+            // Clamp bottom at 0%
+            if (waterLevelPct <= 0) {
+                waterLevelPct = 0;
+                if (isDraining) {
+                    isDraining = false;
+                    addNotification('WARNING', 'Tank Empty (0%)', 'Household taps closed automatically as tank reached 0 Litres.', 'amber');
+                }
+            }
+
+            // Check Low Water Level (20%)
+            if (waterLevelPct <= 20 && !triggeredAlerts.low20) {
+                triggeredAlerts.low20 = true;
+                if (systemMode === 'SMART' && !isPumpRunning) {
+                    isPumpRunning = true;
+                    addNotification('AUTO-START', 'Low Water Level (20%)', 'Smart Relay automatically started the motor pump to refill tank.', 'cyan');
+                } else {
+                    addNotification('ALERT', 'Low Water Warning (20%)', 'Water level dropped to 200L. Please switch on the motor pump.', 'amber');
+                }
+            } else if (waterLevelPct > 22) {
+                triggeredAlerts.low20 = false;
+            }
+
+            // Check 50% Milestone
+            if (waterLevelPct >= 50 && !triggeredAlerts.half50 && isPumpRunning) {
+                triggeredAlerts.half50 = true;
+                addNotification('INFO', 'Tank Half Full (50%)', 'Current Volume: 500 Litres. Ultrasonic sensor reading stable.', 'slate');
+            } else if (waterLevelPct < 48) {
+                triggeredAlerts.half50 = false;
+            }
+
+            // Check 80% Milestone
+            if (waterLevelPct >= 80 && !triggeredAlerts.high80 && isPumpRunning) {
+                triggeredAlerts.high80 = true;
+                addNotification('ALERT', 'Tank at 80% Capacity (800L)', 'Approaching full capacity. Prepare for cut-off.', 'amber');
+            } else if (waterLevelPct < 78) {
+                triggeredAlerts.high80 = false;
+            }
+
+            // SMART MODE: Auto Cut-Off at 95%
+            if (systemMode === 'SMART' && waterLevelPct >= 95 && isPumpRunning) {
+                waterLevelPct = 95;
+                isPumpRunning = false;
+                if (!triggeredAlerts.cut95) {
+                    triggeredAlerts.cut95 = true;
+                    monthlySavedLitres += 115; // Increment saved water metric
+                    addNotification(
+                        'AUTO-CUT',
+                        'Smart Auto-Cut Triggered @ 95%',
+                        'Relay switched OFF motor pump at 950L. Zero overflow! Saved ~115L from spilling.',
+                        'emerald'
+                    );
+                }
+            } else if (waterLevelPct < 93) {
+                triggeredAlerts.cut95 = false;
+            }
+
+            // MANUAL MODE: Reach 100% and Overflow!
+            if (waterLevelPct >= 100) {
+                waterLevelPct = 100;
+
+                if (systemMode === 'MANUAL' && isPumpRunning) {
+                    // Calculate wasted litres per tick
+                    const wastedThisTick = Math.round(1.8 * simSpeedMultiplier);
+                    wastedLitres += wastedThisTick;
+
+                    if (!triggeredAlerts.overflow100) {
+                        triggeredAlerts.overflow100 = true;
+                        addNotification(
+                            'CRITICAL',
+                            'OVERFLOW DETECTED (100%)!',
+                            'Tank is spilling onto the terrace! Manual mode failed to stop pump. Turn off motor or enable Smart Mode!',
+                            'red'
+                        );
+                    }
+                } else if (systemMode === 'SMART' && isPumpRunning) {
+                    // Safety catch if user switched to Smart Mode while at 100%
+                    isPumpRunning = false;
+                    addNotification('AUTO-CUT', 'Emergency Smart Cut-Off', 'Switched to Smart Mode: Motor stopped immediately to halt overflow.', 'emerald');
+                }
+            } else {
+                triggeredAlerts.overflow100 = false;
+            }
+
+            updateUI();
+        }
+
+        // --- Update DOM Elements Safely ---
+        function updateUI() {
+            const roundedPct = Math.round(waterLevelPct);
+            const currentLitres = Math.round((waterLevelPct / 100) * TANK_CAPACITY);
+            // Ultrasonic sensor sits 8cm above full level; calculates distance to water surface
+            const sensorDistanceCm = Math.max(8, Math.round(((100 - waterLevelPct) / 100) * TANK_HEIGHT_CM + 8));
+
+            // 1. KPI Cards
+            document.getElementById('kpi-level-pct').textContent = `${roundedPct}%`;
+            document.getElementById('kpi-level-litres').textContent = `(${currentLitres.toLocaleString('en-IN')} / 1,000 L)`;
+            document.getElementById('kpi-sensor-dist').innerHTML = `<i class="fa-solid fa-wave-square text-cyan-400"></i> JSN-SR04T Reading: <span class="text-slate-200 font-mono">${sensorDistanceCm} cm</span>`;
+            document.getElementById('kpi-water-saved').textContent = `${monthlySavedLitres.toLocaleString('en-IN')} L`;
+
+            // 2. Tank Visuals
+            const waterFillEl = document.getElementById('water-fill-el');
+            waterFillEl.style.height = `${waterLevelPct}%`;
+            document.getElementById('ultrasonic-beam').style.height = `${100 - waterLevelPct}%`;
+            document.getElementById('tank-center-pct').textContent = `${roundedPct}%`;
+            document.getElementById('tank-center-litres').textContent = `${currentLitres} Litres`;
+
+            // Update slider thumb position
+            document.getElementById('quick-level-slider').value = roundedPct;
+            document.getElementById('slider-level-label').textContent = `${roundedPct}%`;
+
+            // 3. Overflow Visual State
+            const isOverflowing = (waterLevelPct >= 100 && isPumpRunning && systemMode === 'MANUAL');
+            const overflowBanner = document.getElementById('overflow-banner');
+            const overflowLeft = document.getElementById('overflow-left');
+            const overflowRight = document.getElementById('overflow-right');
+
+            if (isOverflowing) {
+                overflowBanner.classList.remove('hidden');
+                overflowLeft.classList.remove('hidden');
+                overflowRight.classList.remove('hidden');
+                waterFillEl.classList.add('overflow-state');
+                document.getElementById('wasted-litres-counter').textContent = wastedLitres;
+            } else {
+                overflowBanner.classList.add('hidden');
+                overflowLeft.classList.add('hidden');
+                overflowRight.classList.add('hidden');
+                waterFillEl.classList.remove('overflow-state');
+            }
+
+            // Update mini wasted counter
+            const wastedMini = document.getElementById('wasted-mini-stat');
+            wastedMini.textContent = `${wastedLitres} Litres`;
+            wastedMini.className = wastedLitres > 0 ? 'font-bold text-red-400 mt-0.5' : 'font-bold text-emerald-400 mt-0.5';
+
+            // 4. Motor Pump Status & Button Styling
+            const motorDot = document.getElementById('motor-status-dot');
+            const motorStatusText = document.getElementById('kpi-motor-status');
+            const motorSpinIcon = document.getElementById('motor-spin-icon');
+            const btnPump = document.getElementById('btn-toggle-pump');
+            const btnPumpText = document.getElementById('btn-pump-text');
+            const inletStream = document.getElementById('inlet-stream');
+            const inletFlowRate = document.getElementById('inlet-flow-rate');
+
+            if (isPumpRunning) {
+                motorDot.className = 'w-3 h-3 rounded-full bg-emerald-400 animate-ping';
+                motorStatusText.textContent = 'PUMP ON';
+                motorStatusText.className = 'text-2xl font-bold text-emerald-400';
+                motorSpinIcon.className = 'fa-solid fa-fan fa-spin text-emerald-400';
+                btnPump.className = 'w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 transition flex items-center justify-center gap-2';
+                btnPumpText.textContent = 'Stop Motor Pump';
+                inletStream.classList.remove('opacity-0');
+                inletFlowRate.textContent = `${25 * simSpeedMultiplier} L/min`;
+            } else {
+                motorDot.className = 'w-3 h-3 rounded-full bg-slate-400';
+                motorStatusText.textContent = systemMode === 'SMART' ? 'AUTO-STANDBY' : 'OFF';
+                motorStatusText.className = 'text-2xl font-bold text-white';
+                motorSpinIcon.className = 'fa-solid fa-fan text-slate-400';
+                btnPump.className = 'w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-2';
+                btnPumpText.textContent = 'Start Motor Pump';
+                inletStream.classList.add('opacity-0');
+                inletFlowRate.textContent = '0 L/min';
+            }
+
+            // 5. Household Tap Drain Button Styling
+            const btnDrain = document.getElementById('btn-toggle-drain');
+            const btnDrainText = document.getElementById('btn-drain-text');
+            const outletFlowRate = document.getElementById('outlet-flow-rate');
+
+            if (isDraining) {
+                btnDrain.className = 'w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-2';
+                btnDrainText.textContent = 'Close House Taps';
+                outletFlowRate.textContent = `${16 * simSpeedMultiplier} L/min`;
+            } else {
+                btnDrain.className = 'w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-600 transition flex items-center justify-center gap-2';
+                btnDrainText.textContent = 'Open House Taps';
+                outletFlowRate.textContent = '0 L/min';
+            }
+        }
+
+        // --- Control Panel Handlers ---
+        function setSystemMode(mode) {
+            systemMode = mode;
+            const btnSmart = document.getElementById('btn-mode-smart');
+            const btnManual = document.getElementById('btn-mode-manual');
+            const helperText = document.getElementById('mode-helper-text');
+            const kpiSubtext = document.getElementById('kpi-mode-subtext');
+            const autoCutMarker = document.getElementById('autocut-marker');
+            const sensorBadge = document.getElementById('sensor-badge');
+
+            if (mode === 'SMART') {
+                btnSmart.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md';
+                btnManual.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-white';
+                helperText.className = 'text-xs text-cyan-300/90 mt-2 bg-cyan-950/40 border border-cyan-500/20 rounded-lg p-2.5';
+                helperText.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> <strong>IoT Relay Active:</strong> Ultrasonic sensor automatically cuts off motor relay at 95% (950L) and triggers auto-fill if water drops below 20%.`;
+                kpiSubtext.className = 'text-xs text-emerald-400 mt-1.5 flex items-center gap-1';
+                kpiSubtext.innerHTML = `<i class="fa-solid fa-shield-halved"></i> Auto-Cut Armed @ 95%`;
+                autoCutMarker.classList.remove('opacity-25');
+                sensorBadge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5';
+                sensorBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> IoT Auto-Cut Active`;
+
+                addNotification('MODE', 'Switched to Smart Auto-Cut Mode', 'ESP32 Relay automation enabled. Pump will safely cut off at 95%.', 'cyan');
+
+                // If currently at or above 95% and pump is running, cut it immediately
+                if (waterLevelPct >= 95 && isPumpRunning) {
+                    waterLevelPct = 95;
+                    isPumpRunning = false;
+                    addNotification('AUTO-CUT', 'Smart Relay Engaged', 'Motor stopped automatically as water level is ≥ 95%. Overflow halted!', 'emerald');
+                }
+            } else {
+                btnManual.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-amber-500 to-red-600 text-white shadow-md';
+                btnSmart.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-white';
+                helperText.className = 'text-xs text-amber-300/90 mt-2 bg-amber-950/40 border border-amber-500/20 rounded-lg p-2.5';
+                helperText.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> <strong>Manual Mode (Unprotected):</strong> Simulates a traditional home switch. If you don't stop the pump manually at 100%, the tank will overflow!`;
+                kpiSubtext.className = 'text-xs text-amber-400 mt-1.5 flex items-center gap-1';
+                kpiSubtext.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Manual Mode (Overflow Risk)`;
+                autoCutMarker.classList.add('opacity-25');
+                sensorBadge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5';
+                sensorBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> Auto-Cut Bypassed`;
+
+                addNotification('WARNING', 'Switched to Manual Mode', 'Automated relay cut-off disabled. Watch the tank level closely to avoid terrace overflow!', 'amber');
+            }
+            updateUI();
+        }
+
+        function toggleMotorPump() {
+            if (!isPumpRunning && systemMode === 'SMART' && waterLevelPct >= 95) {
+                addNotification(
+                    'BLOCKED',
+                    'Smart Protection Active (Tank ≥ 95%)',
+                    'Tank is already at 95% capacity. Open House Taps to drain water or switch to Manual Mode to simulate an overflow.',
+                    'emerald'
+                );
+                return;
+            }
+
+            isPumpRunning = !isPumpRunning;
+            if (isPumpRunning) {
+                addNotification('MOTOR', 'Submersible Pump Started', `Filling 1,000L overhead tank in ${systemMode} mode.`, 'cyan');
+            } else {
+                addNotification('MOTOR', 'Submersible Pump Stopped', 'Motor switched off manually by user.', 'slate');
+            }
+            updateUI();
+        }
+
+        function toggleWaterDrain(forceState) {
+            if (typeof forceState === 'boolean') {
+                isDraining = forceState;
+            } else {
+                if (!isDraining && waterLevelPct <= 0) {
+                    addNotification('WARNING', 'Tank is Empty (0%)', 'Cannot open household taps when water level is 0%. Start the motor pump first.', 'amber');
+                    return;
+                }
+                isDraining = !isDraining;
+                if (isDraining) {
+                    addNotification('USAGE', 'Household Taps Opened', 'Simulating domestic water consumption.', 'amber');
+                } else {
+                    addNotification('USAGE', 'Household Taps Closed', 'Outflow consumption stopped.', 'slate');
+                }
+            }
+            updateUI();
+        }
+
+        // 1-Click Evaluator Demo for Instant Overflow
+        function triggerInstantOverflowDemo() {
+            setSystemMode('MANUAL');
+            waterLevelPct = 98;
+            isPumpRunning = true;
+            isDraining = false;
+            resetMilestoneFlags();
+            addNotification(
+                'DEMO',
+                'Instant Overflow Demo Started',
+                'Switched to Manual Mode at 98% with Motor ON. Watch the tank hit 100% and spill!',
+                'red'
+            );
+            updateUI();
+        }
+
+        function handleManualLevelSlide(val) {
+            waterLevelPct = Number(val);
+            resetMilestoneFlags();
+            updateUI();
+        }
+
+        function jumpToLevel(targetPct) {
+            waterLevelPct = Number(targetPct);
+            resetMilestoneFlags();
+
+            if (targetPct === 92) {
+                isPumpRunning = true;
+                addNotification('TEST', 'Jumped to 92% (Pump ON)', `Testing ${systemMode === 'SMART' ? '95% Smart Auto-Cut' : 'Manual Fill to 100%'}.`, 'cyan');
+            } else if (targetPct === 18) {
+                addNotification('TEST', 'Jumped to 18% (Low Level)', 'Testing low-water threshold behavior.', 'amber');
+            } else {
+                addNotification('TEST', `Jumped to ${targetPct}% Tank Level`, `Volume set to ${targetPct * 10} Litres for testing.`, 'slate');
+            }
+            updateUI();
+        }
+
+        function updateSimSpeed(val) {
+            simSpeedMultiplier = Number(val);
+            document.getElementById('speed-label').textContent = `${simSpeedMultiplier}x Fast`;
+            updateUI();
+        }
+
+        function resetMilestoneFlags() {
+            triggeredAlerts.low20 = waterLevelPct <= 20;
+            triggeredAlerts.half50 = waterLevelPct >= 50;
+            triggeredAlerts.high80 = waterLevelPct >= 80;
+            triggeredAlerts.cut95 = false;
+            triggeredAlerts.overflow100 = false;
+        }
+
+        function resetSimulation() {
+            isPumpRunning = false;
+            isDraining = false;
+            waterLevelPct = 62;
+            wastedLitres = 0;
+            setSystemMode('SMART');
+            resetMilestoneFlags();
+            addNotification('SYSTEM', 'Simulation Reset', 'Tank level restored to 62% (620L) and wasted water counter cleared.', 'cyan');
+            updateUI();
+        }
+
+        // --- Colony ROI & Water Savings Calculator ---
+        function updateColonyCalculator() {
+            const houses = Number(document.getElementById('calc-houses-slider').value);
+            const minsPerDay = Number(document.getElementById('calc-mins-slider').value);
+            const litresPerMin = 45; // Average 1.5HP submersible discharge
+
+            const dailyLitresPerHouse = minsPerDay * litresPerMin;
+            const monthlyLitresTotal = houses * dailyLitresPerHouse * 30;
+            const annualLitresTotal = monthlyLitresTotal * 12;
+            const monthlyRupeesSaved = houses * minsPerDay * 150; // Power + pump wear + water tariff estimate
+
+            document.getElementById('calc-houses-label').textContent = `${houses} ${houses === 1 ? 'House' : 'Houses'}`;
+            document.getElementById('calc-mins-label').textContent = `${minsPerDay} ${minsPerDay === 1 ? 'Minute' : 'Minutes'} / day (~${dailyLitresPerHouse} L)`;
+            document.getElementById('calc-monthly-water').textContent = `${monthlyLitresTotal.toLocaleString('en-IN')} L`;
+
+            if (annualLitresTotal >= 100000) {
+                document.getElementById('calc-annual-water').textContent = `${(annualLitresTotal / 100000).toFixed(2)} Lakh L`;
+            } else {
+                document.getElementById('calc-annual-water').textContent = `${annualLitresTotal.toLocaleString('en-IN')} L`;
+            }
+
+            document.getElementById('calc-monthly-rupees').textContent = `₹ ${monthlyRupeesSaved.toLocaleString('en-IN')}`;
+        }
+
+        // --- Smart Notification Log Helper ---
+        function addNotification(tag, title, message, colorTheme = 'cyan') {
+            const feed = document.getElementById('notification-feed');
+            if (!feed) return;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            const badgeColors = {
+                cyan: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+                emerald: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                amber: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+                red: 'bg-red-500/25 text-red-200 border-red-500/40',
+                slate: 'bg-slate-700 text-slate-300 border-slate-600'
+            };
+
+            const cardBorder = colorTheme === 'red' ? 'border-red-500/60 bg-red-950/40' : 'border-slate-700/70 bg-slate-900/70';
+
+            const item = document.createElement('div');
+            item.className = `p-3 rounded-xl border ${cardBorder} text-xs transition-all duration-300`;
+            item.innerHTML = `
+                <div class="flex items-center justify-between gap-2 mb-1">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeColors[colorTheme] || badgeColors.cyan}">
+                        ${tag}
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-mono">${timeStr}</span>
+                </div>
+                <p class="font-bold text-slate-100">${title}</p>
+                <p class="text-slate-400 text-[11px] mt-0.5 leading-relaxed">${message}</p>
+            `;
+
+            feed.prepend(item);
+        }
+
+        function sendTestAlert() {
+            const pct = Math.round(waterLevelPct);
+            addNotification(
+                'SMS PUSH',
+                `JalRakshak v0.0.1 Status: ${pct}%`,
+                ` Tank is at ${pct * 10}L/1000L. Mode: ${systemMode}. Motor: ${isPumpRunning ? 'ON' : 'STANDBY'}.`,
+                'emerald'
+            );
+        }
+
+        function clearLogs() {
+            document.getElementById('notification-feed').innerHTML = '';
+            addNotification('SYSTEM', 'Log Cleared', 'Ready for new sensor events.', 'slate');
+        }
+
+        // --- Design Thinking 5-Stage Filter Tabs ---
+        function highlightDTStage(stage) {
+            const stages = ['empathize', 'define', 'ideate', 'prototype', 'test'];
+            const allTab = document.getElementById('dt-tab-all');
+
+            if (stage === 'all') {
+                allTab.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition';
+            } else {
+                allTab.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+            }
+
+            stages.forEach(s => {
+                const tab = document.getElementById(`dt-tab-${s}`);
+                const card = document.getElementById(`dt-card-${s}`);
+                if (!tab || !card) return;
+
+                if (stage === s) {
+                    tab.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition';
+                    card.classList.remove('opacity-35', 'scale-95');
+                    card.classList.add('ring-2', 'ring-cyan-400', 'scale-[1.02]');
+                } else if (stage === 'all') {
+                    tab.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+                    card.classList.remove('opacity-35', 'scale-95', 'ring-2', 'ring-cyan-400', 'scale-[1.02]');
+                } else {
+                    tab.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+                    card.classList.remove('ring-2', 'ring-cyan-400', 'scale-[1.02]');
+                    card.classList.add('opacity-35', 'scale-95');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
