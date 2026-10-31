@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "author": "JalRakshak Basic Prototype",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 40,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic",
+      "top": -110,
+      "left": 250,
+      "attrs": {
+        "distance": "45.6"
+      }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay",
+      "top": 170,
+      "left": 270,
+      "attrs": {
+        "transistor": "npn"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledPump",
+      "top": 280,
+      "left": 20,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "resPump",
+      "top": 310,
+      "left": -90,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledStop",
+      "top": 380,
+      "left": 20,
+      "attrs": {
+        "color": "red"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "resStop",
+      "top": 410,
+      "left": -90,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX0",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX0",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "ultrasonic:VCC",
+      "esp:VIN",
+      "red",
+      []
+    ],
+    [
+      "ultrasonic:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "ultrasonic:TRIG",
+      "esp:D5",
+      "green",
+      []
+    ],
+    [
+      "ultrasonic:ECHO",
+      "esp:D18",
+      "blue",
+      []
+    ],
+    [
+      "relay:VCC",
+      "esp:VIN",
+      "red",
+      []
+    ],
+    [
+      "relay:GND",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "relay:IN",
+      "esp:D23",
+      "orange",
+      []
+    ],
+    [
+      "esp:D19",
+      "resPump:1",
+      "green",
+      []
+    ],
+    [
+      "resPump:2",
+      "ledPump:A",
+      "green",
+      []
+    ],
+    [
+      "ledPump:C",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:D21",
+      "resStop:1",
+      "red",
+      []
+    ],
+    [
+      "resStop:2",
+      "ledStop:A",
+      "red",
+      []
+    ],
+    [
+      "ledStop:C",
+      "esp:GND.2",
+      "black",
+      []
+    ]
+  ],
+  "serialMonitor": {
+    "display": "terminal"
+  },
+  "dependencies": {}
+}
